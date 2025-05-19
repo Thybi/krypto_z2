@@ -13,8 +13,8 @@ public class ElGamalApp extends JFrame {
 
     private final JTextField pField = new JTextField(40);
     private final JTextField gField = new JTextField(40);
-    private final JTextField yField = new JTextField(40);
-    private final JTextField xField = new JTextField(40);
+    private final JTextField aField = new JTextField(40);
+    private final JTextField hField = new JTextField(40);
 
     private final JTextArea inputArea  = new JTextArea(10, 40);
     private final JTextArea outputArea = new JTextArea(10, 40);
@@ -34,8 +34,8 @@ public class ElGamalApp extends JFrame {
 
         JSplitPane split = new JSplitPane(
                 JSplitPane.HORIZONTAL_SPLIT,
-                createTextPanel("Wejście (tekst/Base64)", inputArea),
-                createTextPanel("Wyjście (tekst/Base64)", outputArea)
+                createTextPanel("Wejście", inputArea),
+                createTextPanel("Wyjście", outputArea)
         );
         split.setResizeWeight(0.5);
         add(split, BorderLayout.CENTER);
@@ -49,8 +49,8 @@ public class ElGamalApp extends JFrame {
 
         panel.add(createRow("p (hex):", pField));
         panel.add(createRow("g (hex):", gField));
-        panel.add(createRow("y = g^x mod p (hex):", yField));
-        panel.add(createRow("x (klucz prywatny) (hex):", xField));
+        panel.add(createRow("a (klucz prywatny) (hex):", aField));
+        panel.add(createRow("h = g^a mod p (hex):", hField));
 
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 
@@ -59,39 +59,35 @@ public class ElGamalApp extends JFrame {
             elgamal = new ElGamal(512); // lub 1024/2048
             pField.setText(elgamal.getP().toString(16));
             gField.setText(elgamal.getG().toString(16));
-            yField.setText(elgamal.getY().toString(16));
-            xField.setText(elgamal.getX().toString(16));
+            aField.setText(elgamal.getA().toString(16));
+            hField.setText(elgamal.getH().toString(16));
         });
         buttonPanel.add(gen);
 
         JButton verify = new JButton("Weryfikuj klucze");
-        verify.addActionListener(e -> {
-            verifyKeys();
-        });
+        verify.addActionListener(e -> verifyKeys());
         buttonPanel.add(verify);
 
-        // Dodaj przycisk do automatycznego obliczania y na podstawie p, g i x
-        JButton calculateY = new JButton("Oblicz y");
-        calculateY.addActionListener(e -> {
+        JButton calculateH = new JButton("Oblicz h");
+        calculateH.addActionListener(e -> {
             try {
                 BigInteger p = new BigInteger(pField.getText().trim(), 16);
                 BigInteger g = new BigInteger(gField.getText().trim(), 16);
-                BigInteger x = new BigInteger(xField.getText().trim(), 16);
+                BigInteger a = new BigInteger(aField.getText().trim(), 16);
 
-                // Oblicz wartość y = g^x mod p
-                BigInteger calculatedY = g.modPow(x, p);
-                yField.setText(calculatedY.toString(16));
+                BigInteger calculatedH = g.modPow(a, p);
+                hField.setText(calculatedH.toString(16));
 
                 JOptionPane.showMessageDialog(this,
-                        "Wartość y została obliczona i zaktualizowana.",
-                        "Obliczanie y",
+                        "Wartość h została obliczona i zaktualizowana.",
+                        "Obliczanie h",
                         JOptionPane.INFORMATION_MESSAGE);
 
             } catch (Exception ex) {
                 showError(ex);
             }
         });
-        buttonPanel.add(calculateY);
+        buttonPanel.add(calculateH);
 
         panel.add(buttonPanel);
 
@@ -102,23 +98,22 @@ public class ElGamalApp extends JFrame {
         try {
             BigInteger p = new BigInteger(pField.getText().trim(), 16);
             BigInteger g = new BigInteger(gField.getText().trim(), 16);
-            BigInteger y = new BigInteger(yField.getText().trim(), 16);
-            BigInteger x = new BigInteger(xField.getText().trim(), 16);
+            BigInteger a = new BigInteger(aField.getText().trim(), 16);
+            BigInteger h = new BigInteger(hField.getText().trim(), 16);
 
-            // Oblicz oczekiwaną wartość y = g^x mod p
-            BigInteger calculatedY = g.modPow(x, p);
+            BigInteger calculatedH = g.modPow(a, p);
 
-            if (!calculatedY.equals(y)) {
+            if (!calculatedH.equals(h)) {
                 JOptionPane.showMessageDialog(this,
-                        "Klucze nie spełniają warunku y = g^x mod p!\n" +
-                                "Oczekiwana wartość y (hex): " + calculatedY.toString(16) + "\n" +
-                                "Wprowadzona wartość y (hex): " + y.toString(16),
+                        "Klucze nie spełniają warunku h = g^a mod p!\n" +
+                                "Oczekiwana wartość h (hex): " + calculatedH.toString(16) + "\n" +
+                                "Wprowadzona wartość h (hex): " + h.toString(16),
                         "Błąd weryfikacji kluczy",
                         JOptionPane.ERROR_MESSAGE);
                 return false;
             }
 
-            elgamal = new ElGamal(p, g, y, x);
+            elgamal = new ElGamal(p, g, h, a);
             JOptionPane.showMessageDialog(this,
                     "Klucze są poprawne i zostały załadowane.",
                     "Weryfikacja kluczy",
@@ -181,10 +176,9 @@ public class ElGamalApp extends JFrame {
 
     private void process(boolean doEncrypt) {
         try {
-            // Sprawdź, czy klucze są już załadowane, a jeśli nie - zweryfikuj je
             if (elgamal == null) {
                 if (!verifyKeys()) {
-                    return; // Przerwij wykonanie, jeśli weryfikacja nie powiodła się
+                    return;
                 }
             }
 
@@ -196,12 +190,12 @@ public class ElGamalApp extends JFrame {
                 List<BigInteger[]> ct = elgamal.encrypt(in);
                 ByteArrayOutputStream bout = new ByteArrayOutputStream();
                 for (BigInteger[] pair: ct) {
-                    byte[] a = pair[0].toByteArray();
-                    byte[] b = pair[1].toByteArray();
-                    bout.write((byte)a.length);
-                    bout.write(a);
-                    bout.write((byte)b.length);
-                    bout.write(b);
+                    byte[] aBytes = pair[0].toByteArray();
+                    byte[] bBytes = pair[1].toByteArray();
+                    bout.write((byte)aBytes.length);
+                    bout.write(aBytes);
+                    bout.write((byte)bBytes.length);
+                    bout.write(bBytes);
                 }
                 outputData = bout.toByteArray();
                 outputArea.setText(Base64.getEncoder().encodeToString(outputData));
@@ -211,10 +205,10 @@ public class ElGamalApp extends JFrame {
                 List<BigInteger[]> ct = new java.util.ArrayList<>();
                 while (bin.available()>0) {
                     int la = bin.read();
-                    byte[] a = bin.readNBytes(la);
+                    byte[] aBytes = bin.readNBytes(la);
                     int lb = bin.read();
-                    byte[] b = bin.readNBytes(lb);
-                    ct.add(new BigInteger[]{ new BigInteger(a), new BigInteger(b) });
+                    byte[] bBytes = bin.readNBytes(lb);
+                    ct.add(new BigInteger[]{ new BigInteger(aBytes), new BigInteger(bBytes) });
                 }
                 byte[] dec = elgamal.decrypt(ct);
                 outputData = dec;
