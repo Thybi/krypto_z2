@@ -44,13 +44,15 @@ public class ElGamalApp extends JFrame {
     }
 
     private JPanel createKeyPanel() {
-        JPanel p = new JPanel(new GridLayout(5,1,5,5));
-        p.setBorder(new TitledBorder("Parametry i klucze ElGamal"));
+        JPanel panel = new JPanel(new GridLayout(5,1,5,5));
+        panel.setBorder(new TitledBorder("Parametry i klucze ElGamal"));
 
-        p.add(createRow("p (hex):", pField));
-        p.add(createRow("g (hex):", gField));
-        p.add(createRow("y = g^x mod p (hex):", yField));
-        p.add(createRow("x (klucz prywatny) (hex):", xField));
+        panel.add(createRow("p (hex):", pField));
+        panel.add(createRow("g (hex):", gField));
+        panel.add(createRow("y = g^x mod p (hex):", yField));
+        panel.add(createRow("x (klucz prywatny) (hex):", xField));
+
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 
         JButton gen = new JButton("Generuj nowe klucze");
         gen.addActionListener(e -> {
@@ -60,9 +62,72 @@ public class ElGamalApp extends JFrame {
             yField.setText(elgamal.getY().toString(16));
             xField.setText(elgamal.getX().toString(16));
         });
-        p.add(gen);
+        buttonPanel.add(gen);
 
-        return p;
+        JButton verify = new JButton("Weryfikuj klucze");
+        verify.addActionListener(e -> {
+            verifyKeys();
+        });
+        buttonPanel.add(verify);
+
+        // Dodaj przycisk do automatycznego obliczania y na podstawie p, g i x
+        JButton calculateY = new JButton("Oblicz y");
+        calculateY.addActionListener(e -> {
+            try {
+                BigInteger p = new BigInteger(pField.getText().trim(), 16);
+                BigInteger g = new BigInteger(gField.getText().trim(), 16);
+                BigInteger x = new BigInteger(xField.getText().trim(), 16);
+
+                // Oblicz wartość y = g^x mod p
+                BigInteger calculatedY = g.modPow(x, p);
+                yField.setText(calculatedY.toString(16));
+
+                JOptionPane.showMessageDialog(this,
+                        "Wartość y została obliczona i zaktualizowana.",
+                        "Obliczanie y",
+                        JOptionPane.INFORMATION_MESSAGE);
+
+            } catch (Exception ex) {
+                showError(ex);
+            }
+        });
+        buttonPanel.add(calculateY);
+
+        panel.add(buttonPanel);
+
+        return panel;
+    }
+
+    private boolean verifyKeys() {
+        try {
+            BigInteger p = new BigInteger(pField.getText().trim(), 16);
+            BigInteger g = new BigInteger(gField.getText().trim(), 16);
+            BigInteger y = new BigInteger(yField.getText().trim(), 16);
+            BigInteger x = new BigInteger(xField.getText().trim(), 16);
+
+            // Oblicz oczekiwaną wartość y = g^x mod p
+            BigInteger calculatedY = g.modPow(x, p);
+
+            if (!calculatedY.equals(y)) {
+                JOptionPane.showMessageDialog(this,
+                        "Klucze nie spełniają warunku y = g^x mod p!\n" +
+                                "Oczekiwana wartość y (hex): " + calculatedY.toString(16) + "\n" +
+                                "Wprowadzona wartość y (hex): " + y.toString(16),
+                        "Błąd weryfikacji kluczy",
+                        JOptionPane.ERROR_MESSAGE);
+                return false;
+            }
+
+            elgamal = new ElGamal(p, g, y, x);
+            JOptionPane.showMessageDialog(this,
+                    "Klucze są poprawne i zostały załadowane.",
+                    "Weryfikacja kluczy",
+                    JOptionPane.INFORMATION_MESSAGE);
+            return true;
+        } catch (Exception ex) {
+            showError(ex);
+            return false;
+        }
     }
 
     private JPanel createRow(String label, JTextField field) {
@@ -73,17 +138,17 @@ public class ElGamalApp extends JFrame {
     }
 
     private JPanel createTextPanel(String title, JTextArea area) {
-        JPanel p = new JPanel(new BorderLayout());
-        p.setBorder(new TitledBorder(title));
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBorder(new TitledBorder(title));
         area.setFont(new Font("Monospaced",Font.PLAIN,12));
         JScrollPane sc = new JScrollPane(area);
         sc.setPreferredSize(new Dimension(550,300));
-        p.add(sc);
-        return p;
+        panel.add(sc);
+        return panel;
     }
 
     private JPanel createButtonPanel() {
-        JPanel p = new JPanel(new FlowLayout(FlowLayout.CENTER,10,10));
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER,10,10));
         JButton load = new JButton("Załaduj plik");
         JButton save = new JButton("Zapisz plik");
         JButton encrypt = new JButton("Szyfruj");
@@ -110,17 +175,18 @@ public class ElGamalApp extends JFrame {
         encrypt.addActionListener(e -> process(true));
         decrypt.addActionListener(e -> process(false));
 
-        p.add(load); p.add(save); p.add(encrypt); p.add(decrypt);
-        return p;
+        panel.add(load); panel.add(save); panel.add(encrypt); panel.add(decrypt);
+        return panel;
     }
 
     private void process(boolean doEncrypt) {
         try {
-            BigInteger p = new BigInteger(pField.getText(),16);
-            BigInteger g = new BigInteger(gField.getText(),16);
-            BigInteger y = new BigInteger(yField.getText(),16);
-            BigInteger x = new BigInteger(xField.getText(),16);
-            elgamal = new ElGamal(p,g,y,x);
+            // Sprawdź, czy klucze są już załadowane, a jeśli nie - zweryfikuj je
+            if (elgamal == null) {
+                if (!verifyKeys()) {
+                    return; // Przerwij wykonanie, jeśli weryfikacja nie powiodła się
+                }
+            }
 
             byte[] in = doEncrypt
                     ? (inputData!=null ? inputData : inputArea.getText().getBytes(StandardCharsets.UTF_8))

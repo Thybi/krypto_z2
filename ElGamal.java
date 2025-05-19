@@ -47,7 +47,7 @@ public class ElGamal {
             BigInteger a = ct.get(i)[0], b = ct.get(i)[1];
             BigInteger s = a.modPow(x, p);
             BigInteger m = b.multiply(s.modInverse(p)).mod(p);
-            res[i] = m.byteValue();
+            res[i] = m.mod(BigInteger.valueOf(256)).byteValue();
         }
         return res;
     }
